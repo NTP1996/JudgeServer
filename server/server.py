@@ -19,6 +19,9 @@ app.debug = DEBUG
 
 
 class InitSubmissionEnv(object):
+    # 初始化工作目录
+    #
+    #
     def __init__(self, judger_workspace, submission_id, init_test_case_dir=False):
         self.work_dir = os.path.join(judger_workspace, submission_id)
         self.init_test_case_dir = init_test_case_dir
@@ -49,11 +52,13 @@ class InitSubmissionEnv(object):
 
 
 class JudgeServer:
+    # 没看懂
     @classmethod
     def ping(cls):
         data = server_info()
         data["action"] = "pong"
         return data
+
 
     @classmethod
     def judge(cls, language_config, src, max_cpu_time, max_memory, test_case_id=None, test_case=None,
@@ -68,8 +73,9 @@ class JudgeServer:
         compile_config = language_config.get("compile")
         run_config = language_config["run"]
         submission_id = uuid.uuid4().hex
-
+        # 是否是特殊题
         is_spj = spj_version and spj_config
+
 
         if is_spj:
             spj_exe_path = os.path.join(SPJ_EXE_DIR, spj_config["exe_name"].format(spj_version=spj_version))
@@ -78,16 +84,17 @@ class JudgeServer:
                 logger.warning("%s does not exists, spj src will be recompiled")
                 cls.compile_spj(spj_version=spj_version, src=spj_src,
                                 spj_compile_config=spj_compile_config)
-
+        # 初始化判题目录
         init_test_case_dir = bool(test_case)
         with InitSubmissionEnv(JUDGER_WORKSPACE_BASE, submission_id=str(submission_id), init_test_case_dir=init_test_case_dir) as dirs:
             submission_dir, test_case_dir = dirs
             test_case_dir = test_case_dir or os.path.join(TEST_CASE_DIR, test_case_id)
 
+            #若compile_config 不为空创建获得源码路径
             if compile_config:
                 src_path = os.path.join(submission_dir, compile_config["src_name"])
 
-                # write source code into file
+                # 将源码写入源码地址
                 with open(src_path, "w", encoding="utf-8") as f:
                     f.write(src)
                 os.chown(src_path, COMPILER_USER_UID, 0)
@@ -104,18 +111,33 @@ class JudgeServer:
                     os.chmod(exe_path, 0o500)
                 except Exception:
                     pass
+            #若compile_config为空 直接获得EXE路径
             else:
                 exe_path = os.path.join(submission_dir, run_config["exe_name"])
                 with open(exe_path, "w", encoding="utf-8") as f:
                     f.write(src)
 
+            # 初始化判题目录
+            # info
+            # |-test_case_numeber int
+            # |-spj bool
+            # |-test_cases
+            # ||-item_info[0]
+            # ||-item_info[1]
+            # ||- ...
             if init_test_case_dir:
                 info = {"test_case_number": len(test_case), "spj": is_spj, "test_cases": {}}
                 # write test case
                 for index, item in enumerate(test_case):
                     index += 1
                     item_info = {}
-
+                    # item_info
+                    # |-input_name
+                    # |-input_size
+                    # |-output_name
+                    # |-output_md5
+                    # |-output_size
+                    # |-stripped_output_md5
                     input_name = str(index) + ".in"
                     item_info["input_name"] = input_name
                     input_data = item["input"].encode("utf-8")
@@ -129,14 +151,19 @@ class JudgeServer:
                         output_data = item["output"].encode("utf-8")
                         item_info["output_md5"] = hashlib.md5(output_data).hexdigest()
                         item_info["output_size"] = len(output_data)
+                        # strip()
+                        # 方法用于移除字符串头尾指定的字符（默认为空格或换行符）或字符序列。
+                        # strip() 方法用于移除字符串头尾指定的字符（默认为空格或换行符）或字符序列。
                         item_info["stripped_output_md5"] = hashlib.md5(output_data.rstrip()).hexdigest()
 
                         with open(os.path.join(test_case_dir, output_name), "wb") as f:
                             f.write(output_data)
                     info["test_cases"][index] = item_info
                 with open(os.path.join(test_case_dir, "info"), "w") as f:
-                    json.dump(info, f)
+                     json.dump(info, f)
+                    # json.dumps()函数是将一个Python数据类型列表进行json格式的编码
 
+            # 开始初始化评测机
             judge_client = JudgeClient(run_config=language_config["run"],
                                        exe_path=exe_path,
                                        max_cpu_time=max_cpu_time,

@@ -21,6 +21,7 @@ class JudgeService(object):
             logger.exception(e)
             raise JudgeServiceError("Heartbeat request failed")
         try:
+            # json.loads() 字符串-->字典
             r = json.loads(resp)
             if r["error"]:
                 raise JudgeServiceError(r["data"])
@@ -36,6 +37,7 @@ class JudgeService(object):
 
 
 if __name__ == "__main__":
+    # 发送心跳
     try:
         if not os.environ.get("DISABLE_HEARTBEAT"):
             service = JudgeService()
